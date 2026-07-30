@@ -5,6 +5,7 @@ import pandas as pd
 import json
 import os
 
+# --- 1. إعدادات الصفحة ---
 st.set_page_config(
     page_title="محلل أسهم الشريعة الإسلامية - البورصة المصرية",
     page_icon="🟢",
@@ -12,60 +13,117 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# --- 2. تنسيق الواجهة ودعم اللغة العربية والموبايل ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+
     html, body, [class*="st-"] {
         font-family: 'Cairo', sans-serif !important;
         direction: rtl;
         text-align: right;
     }
-    [data-testid="collapsedControl"] { display: none !important; }
-    .main-header { text-align: center; padding: 10px 0; color: #1e293b; }
-    .stock-card {
-        background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;
-        padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+
+    [data-testid="collapsedControl"] {
+        display: none !important;
     }
-    .stock-title { font-size: 1rem; font-weight: 700; color: #0f172a; }
-    .stock-price { font-size: 1.15rem; font-weight: 700; color: #0f172a; }
+
+    .main-header {
+        text-align: center;
+        padding: 10px 0;
+        color: #1e293b;
+    }
+
+    .stock-card {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+
+    .stock-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .stock-price {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
     .price-up { color: #16a34a; font-weight: bold; }
     .price-down { color: #dc2626; font-weight: bold; }
+
     .opp-card {
-        background-color: #ffffff; border-right: 5px solid #2563eb; border-radius: 10px;
-        padding: 16px; margin-bottom: 15px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        border-top: 1px solid #f1f5f9; border-left: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;
+        background-color: #ffffff;
+        border-right: 5px solid #2563eb;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border-top: 1px solid #f1f5f9;
+        border-left: 1px solid #f1f5f9;
+        border-bottom: 1px solid #f1f5f9;
     }
+
     .badge-buy-strong {
-        background-color: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 20px;
-        font-size: 0.85rem; font-weight: bold;
+        background-color: #dcfce7;
+        color: #15803d;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: bold;
     }
+
     .badge-buy {
-        background-color: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 20px;
-        font-size: 0.85rem; font-weight: bold;
+        background-color: #e0f2fe;
+        color: #0369a1;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: bold;
     }
+
     .badge-time {
-        background-color: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 15px;
-        font-size: 0.75rem; font-weight: 600;
+        background-color: #f1f5f9;
+        color: #475569;
+        padding: 3px 8px;
+        border-radius: 15px;
+        font-size: 0.75rem;
+        font-weight: 600;
     }
+
     .stButton > button {
-        border-radius: 8px; font-weight: bold; background-color: #2563eb; color: white;
+        border-radius: 8px;
+        font-weight: bold;
+        background-color: #2563eb;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
+# --- 3. إعداد Gemini ---
 def get_gemini_model():
     api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         st.error("⚠️ لم يتم العثور على GEMINI_API_KEY في Secrets أو متغيرات البيئة!")
         st.stop()
+
     genai.configure(api_key=api_key)
+
     for model_name in ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]:
         try:
             return genai.GenerativeModel(model_name)
         except Exception:
             continue
+
     return genai.GenerativeModel("gemini-1.5-flash")
 
+# --- 4. قائمة الأسهم الشاملة ---
 SHARIAH_STOCKS = {
     "القاهرة للخدمات التعليمية": "CAED.CA",
     "شركة مستشفي كليوباترا": "CLHO.CA",
@@ -160,47 +218,119 @@ SHARIAH_STOCKS = {
     "سيدي كرير للبتروكيماويات": "SKPC.CA"
 }
 
-@st.cache_data(ttl=180)
+# --- 5. أدوات الأسعار ---
+def get_live_price(ticker):
+    try:
+        fi = ticker.fast_info
+        last_price = fi.get("lastPrice", None)
+        if last_price is not None and pd.notna(last_price):
+            return float(last_price)
+    except Exception:
+        pass
+
+    try:
+        hist_1m = ticker.history(period="1d", interval="1m", auto_adjust=False)
+        if hist_1m is not None and not hist_1m.empty:
+            closes = hist_1m["Close"].dropna()
+            if not closes.empty:
+                return float(closes.iloc[-1])
+    except Exception:
+        pass
+
+    try:
+        hist_1d = ticker.history(period="5d", interval="1d", auto_adjust=False)
+        if hist_1d is not None and not hist_1d.empty:
+            closes = hist_1d["Close"].dropna()
+            if not closes.empty:
+                return float(closes.iloc[-1])
+    except Exception:
+        pass
+
+    return None
+
+def calc_entry_target_stop(live_price):
+    if live_price is None:
+        return None, None, None
+    buy_price = live_price * 0.995
+    target_price = buy_price * 1.08
+    stop_loss = buy_price * 0.96
+    return buy_price, target_price, stop_loss
+
+# --- 6. جلب البيانات ---
+@st.cache_data(ttl=60)
 def fetch_stocks_data():
     results = []
     for name, symbol in SHARIAH_STOCKS.items():
         try:
-            hist = yf.Ticker(symbol).history(period="5d", interval="1d", auto_adjust=False)
+            t = yf.Ticker(symbol)
+            live_price = get_live_price(t)
+
+            hist = t.history(period="5d", interval="1d", auto_adjust=False)
+
+            pct_change = 0.0
+            change = 0.0
+            high = None
+            low = None
+
             if hist is not None and not hist.empty:
-                last_close = float(hist["Close"].iloc[-1])
-                prev_close = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else last_close
-                change = last_close - prev_close
-                pct_change = (change / prev_close) * 100 if prev_close else 0.0
-                high = float(hist["High"].max())
-                low = float(hist["Low"].min())
-                buy_price = last_close
-                target_price = last_close * 1.08
-                stop_loss = last_close * 0.96
-                results.append({
-                    "name": name,
-                    "symbol": symbol.replace(".CA", ""),
-                    "price": last_close,
-                    "change": change,
-                    "pct_change": pct_change,
-                    "high": high,
-                    "low": low,
-                    "buy_price": buy_price,
-                    "target_price": target_price,
-                    "stop_loss": stop_loss
-                })
+                closes = hist["Close"].dropna()
+                highs = hist["High"].dropna()
+                lows = hist["Low"].dropna()
+
+                if len(closes) >= 2:
+                    prev_close = float(closes.iloc[-2])
+                    latest_close = float(closes.iloc[-1])
+                    change = latest_close - prev_close
+                    pct_change = (change / prev_close) * 100 if prev_close else 0.0
+                elif len(closes) == 1:
+                    latest_close = float(closes.iloc[-1])
+                    change = 0.0
+                    pct_change = 0.0
+                else:
+                    latest_close = None
+
+                if not highs.empty:
+                    high = float(highs.max())
+                if not lows.empty:
+                    low = float(lows.min())
+
+            if live_price is None:
+                live_price = latest_close if "latest_close" in locals() else None
+
+            buy_price, target_price, stop_loss = calc_entry_target_stop(live_price)
+
+            results.append({
+                "name": name,
+                "symbol": symbol.replace(".CA", ""),
+                "price": live_price,
+                "change": change,
+                "pct_change": pct_change,
+                "high": high,
+                "low": low,
+                "buy_price": buy_price,
+                "target_price": target_price,
+                "stop_loss": stop_loss
+            })
         except Exception:
             continue
+
     return pd.DataFrame(results)
 
+# --- 7. تحليل الفرص ---
 def generate_ai_opportunities(df_stocks, timeframe_filter):
     model = get_gemini_model()
+
     seed_val = abs(hash(timeframe_filter)) % 1000
     df_shuffled = df_stocks.sample(frac=1, random_state=seed_val).reset_index(drop=True)
 
     stocks_summary = []
     for _, row in df_shuffled.head(35).iterrows():
+        price_txt = f"{row['price']:.2f}" if pd.notna(row["price"]) else "غير متاح"
+        pct_txt = f"{row['pct_change']:.2f}" if pd.notna(row["pct_change"]) else "0.00"
+        high_txt = f"{row['high']:.2f}" if pd.notna(row["high"]) else "غير متاح"
+        low_txt = f"{row['low']:.2f}" if pd.notna(row["low"]) else "غير متاح"
         stocks_summary.append(
-            f"- {row['name']} ({row['symbol']}): السعر الحالي {row['price']:.2f} EGP، التغير {row['pct_change']:.2f}%، أعلى {row['high']:.2f}، أقل {row['low']:.2f}"
+            f"- {row['name']} ({row['symbol']}): السعر الحالي {price_txt} EGP، التغير {pct_txt}%، أعلى {high_txt}، أقل {low_txt}"
         )
 
     if timeframe_filter == "جميع المدى الزمني":
@@ -231,7 +361,7 @@ def generate_ai_opportunities(df_stocks, timeframe_filter):
         if "```json" in text:
             text = text.split("```json")[1].split("```").strip()
         elif "```" in text:
-            text = text.split("```")[4].split("```")[0].strip()
+            text = text.split("```")[11].split("```")[0].strip()
         return json.loads(text)
     except Exception:
         timings = ["مضاربة يومية", "صعود أسبوعي", "صعود شهري", "مضاربة يومية"]
@@ -242,7 +372,10 @@ def generate_ai_opportunities(df_stocks, timeframe_filter):
             "زخم شرائي مكثف يظهر بوضوح في الجلسات الأخيرة مع تحركات إيجابية لأعلى."
         ]
         fallback_list = []
-        sample_df = df_stocks.dropna(subset=["price"]).sample(min(4, len(df_stocks.dropna(subset=["price"]))), random_state=seed_val)
+        sample_df = df_stocks.dropna(subset=["price"]).sample(
+            min(4, len(df_stocks.dropna(subset=["price"]))),
+            random_state=seed_val
+        )
         for idx, (_, row) in enumerate(sample_df.iterrows()):
             assigned_time = timings[idx % len(timings)] if timeframe_filter == "جميع المدى الزمني" else timeframe_filter
             fallback_list.append({
@@ -253,6 +386,7 @@ def generate_ai_opportunities(df_stocks, timeframe_filter):
             })
         return fallback_list
 
+# --- 8. واجهة التطبيق ---
 st.markdown('<h1 class="main-header">📈 أسهم الشريعة الإسلامية - البورصة المصرية</h1>', unsafe_allow_html=True)
 
 col_info, col_btn = st.columns([3, 1])
@@ -267,21 +401,33 @@ with st.spinner("جاري جلب الأسعار اللحظية لقائمتك...
     df_stocks = fetch_stocks_data()
 
 st.subheader("🔥 أكثر 5 أسهم ارتفاعاً في قائمتك")
+
 if not df_stocks.empty:
     top_gainers = df_stocks.sort_values(by="pct_change", ascending=False).head(5)
+
     for _, item in top_gainers.iterrows():
-        pct = float(item["pct_change"])
+        pct = float(item["pct_change"]) if pd.notna(item["pct_change"]) else 0.0
         sign = "+" if pct >= 0 else ""
+        price = item["price"]
+        high = item["high"]
+        low = item["low"]
+
+        change_class = "price-up" if pct >= 0 else "price-down"
         price_color = "#16a34a" if pct >= 0 else "#dc2626"
+
+        price_text = f"{price:.2f} EGP" if pd.notna(price) else "غير متاح"
+        high_text = f"{high:.2f}" if pd.notna(high) else "غير متاح"
+        low_text = f"{low:.2f}" if pd.notna(low) else "غير متاح"
+
         st.markdown(f"""
         <div class="stock-card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span class="stock-title">{item['name']} <small style="color:#64748b;">({item['symbol']})</small></span>
-                <span class="{'price-up' if pct >= 0 else 'price-down'}">{sign}{pct:.2f}%</span>
+                <span class="{change_class}">{sign}{pct:.2f}%</span>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                <span class="stock-price" style="color:{price_color};">{item['price']:.2f} EGP</span>
-                <span style="font-size: 0.8rem; color: #64748b;">أعلى: {item['high']:.2f} | أقل: {item['low']:.2f}</span>
+                <span class="stock-price" style="color:{price_color};">{price_text}</span>
+                <span style="font-size: 0.8rem; color: #64748b;">أعلى: {high_text} | أقل: {low_text}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -378,10 +524,4 @@ if not df_stocks.empty:
                         <div style="font-weight: bold; color: #dc2626;">{stop_loss_text}</div>
                     </div>
                 </div>
-                <div style="font-size: 0.9rem; color: #334155;">
-                    <strong>💡 أسباب التحليل:</strong> {item.get('أسباب التحليل')}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-else:
-    st.info("لا توجد بيانات حالياً.")
+                <div s
