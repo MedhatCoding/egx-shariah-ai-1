@@ -4,7 +4,7 @@ import inspect
 
 import pandas as pd
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 
 try:
     import egxpy
@@ -41,16 +41,12 @@ SHARIAH_SYMBOLS = {
     "TMGH", "ABUK", "EGAL", "SKP"
 }
 
-def get_gemini_model():
+def get_gemini_client():
     api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         st.error("ضع GEMINI_API_KEY في Streamlit Secrets.")
         st.stop()
-    genai.configure(api_key=api_key)
-    try:
-        return genai.GenerativeModel("gemini-2.5-flash")
-    except Exception:
-        return genai.GenerativeModel("gemini-1.5-flash")
+    return genai.Client(api_key=api_key)
 
 def normalize_frame(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
@@ -152,7 +148,7 @@ def score_candidates(df, mode="up", limit=20):
     return d.sort_values(["momentum", "liquidity"], ascending=[True, False]).head(limit).reset_index(drop=True)
 
 def gemini_analyze(df_candidates, mode="up"):
-    model = get_gemini_model()
+    client = get_gemini_client()
     payload = []
     for _, r in df_candidates.iterrows():
         payload.append({
@@ -193,7 +189,10 @@ def gemini_analyze(df_candidates, mode="up"):
 {json.dumps(payload, ensure_ascii=False)}
 """
     try:
-        resp = model.generate_content(prompt)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
         text = resp.text.strip()
         if "```json" in text:
             text = text.split("```json", 1)[1].split("```", 1).strip()
@@ -301,4 +300,4 @@ else:
             </div>
             """,
             unsafe_allow_html=True,
-    )
+        )
