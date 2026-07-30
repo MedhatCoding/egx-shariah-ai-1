@@ -1,17 +1,6 @@
-# EGX Shariah Market Intelligence
+# EGX Live Shariah Analyzer
 
-تطبيق Streamlit احترافي لتحليل الأسهم المتوافقة مع الشريعة في السوق المصري اعتمادًا على طبقة EGX قابلة للتعديل، مع Gemini Structured Output.
-
-## الفكرة
-- إدخال بيانات EGX من CSV أو JSON رسمي.
-- فلترة الأسهم المتوافقة مع الشريعة.
-- ترتيب الفرص حسب الزخم والسيولة.
-- استخدام Gemini لإخراج JSON منظم للفرص.
-
-## الملفات
-- `app.py`
-- `requirements.txt`
-- `README.md`
+تطبيق Streamlit مباشر بدون CSV، يعتمد على EGXPY لجلب بيانات EGX ثم Gemini لإخراج فرص منظمة بصيغة JSON.
 
 ## التشغيل المحلي
 ```bash
