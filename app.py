@@ -5,7 +5,6 @@ import pandas as pd
 import json
 import os
 
-# --- 1. إعدادات الصفحة ---
 st.set_page_config(
     page_title="محلل أسهم الشريعة الإسلامية - البورصة المصرية",
     page_icon="🟢",
@@ -13,117 +12,60 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. تنسيق الواجهة ودعم اللغة العربية والموبايل ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-
     html, body, [class*="st-"] {
         font-family: 'Cairo', sans-serif !important;
         direction: rtl;
         text-align: right;
     }
-
-    [data-testid="collapsedControl"] {
-        display: none !important;
-    }
-
-    .main-header {
-        text-align: center;
-        padding: 10px 0;
-        color: #1e293b;
-    }
-
+    [data-testid="collapsedControl"] { display: none !important; }
+    .main-header { text-align: center; padding: 10px 0; color: #1e293b; }
     .stock-card {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 14px;
-        margin-bottom: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;
+        padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.03);
     }
-
-    .stock-title {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #0f172a;
-    }
-
-    .stock-price {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: #0f172a;
-    }
-
+    .stock-title { font-size: 1rem; font-weight: 700; color: #0f172a; }
+    .stock-price { font-size: 1.15rem; font-weight: 700; color: #0f172a; }
     .price-up { color: #16a34a; font-weight: bold; }
     .price-down { color: #dc2626; font-weight: bold; }
-
     .opp-card {
-        background-color: #ffffff;
-        border-right: 5px solid #2563eb;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 15px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        border-top: 1px solid #f1f5f9;
-        border-left: 1px solid #f1f5f9;
-        border-bottom: 1px solid #f1f5f9;
+        background-color: #ffffff; border-right: 5px solid #2563eb; border-radius: 10px;
+        padding: 16px; margin-bottom: 15px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border-top: 1px solid #f1f5f9; border-left: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;
     }
-
     .badge-buy-strong {
-        background-color: #dcfce7;
-        color: #15803d;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: bold;
+        background-color: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 20px;
+        font-size: 0.85rem; font-weight: bold;
     }
-
     .badge-buy {
-        background-color: #e0f2fe;
-        color: #0369a1;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: bold;
+        background-color: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 20px;
+        font-size: 0.85rem; font-weight: bold;
     }
-
     .badge-time {
-        background-color: #f1f5f9;
-        color: #475569;
-        padding: 3px 8px;
-        border-radius: 15px;
-        font-size: 0.75rem;
-        font-weight: 600;
+        background-color: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 15px;
+        font-size: 0.75rem; font-weight: 600;
     }
-
     .stButton > button {
-        border-radius: 8px;
-        font-weight: bold;
-        background-color: #2563eb;
-        color: white;
+        border-radius: 8px; font-weight: bold; background-color: #2563eb; color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. إعداد Gemini ---
 def get_gemini_model():
     api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         st.error("⚠️ لم يتم العثور على GEMINI_API_KEY في Secrets أو متغيرات البيئة!")
         st.stop()
-
     genai.configure(api_key=api_key)
-
     for model_name in ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]:
         try:
             return genai.GenerativeModel(model_name)
         except Exception:
             continue
-
     return genai.GenerativeModel("gemini-1.5-flash")
 
-# --- 4. قائمة الأسهم الشاملة ---
 SHARIAH_STOCKS = {
     "القاهرة للخدمات التعليمية": "CAED.CA",
     "شركة مستشفي كليوباترا": "CLHO.CA",
@@ -218,7 +160,6 @@ SHARIAH_STOCKS = {
     "سيدي كرير للبتروكيماويات": "SKPC.CA"
 }
 
-# --- 5. أدوات الأسعار ---
 def get_live_price(ticker):
     try:
         fi = ticker.fast_info
@@ -227,7 +168,6 @@ def get_live_price(ticker):
             return float(last_price)
     except Exception:
         pass
-
     try:
         hist_1m = ticker.history(period="1d", interval="1m", auto_adjust=False)
         if hist_1m is not None and not hist_1m.empty:
@@ -236,7 +176,6 @@ def get_live_price(ticker):
                 return float(closes.iloc[-1])
     except Exception:
         pass
-
     try:
         hist_1d = ticker.history(period="5d", interval="1d", auto_adjust=False)
         if hist_1d is not None and not hist_1d.empty:
@@ -245,7 +184,6 @@ def get_live_price(ticker):
                 return float(closes.iloc[-1])
     except Exception:
         pass
-
     return None
 
 def calc_entry_target_stop(live_price):
@@ -256,7 +194,6 @@ def calc_entry_target_stop(live_price):
     stop_loss = buy_price * 0.96
     return buy_price, target_price, stop_loss
 
-# --- 6. جلب البيانات ---
 @st.cache_data(ttl=60)
 def fetch_stocks_data():
     results = []
@@ -264,13 +201,13 @@ def fetch_stocks_data():
         try:
             t = yf.Ticker(symbol)
             live_price = get_live_price(t)
-
             hist = t.history(period="5d", interval="1d", auto_adjust=False)
 
-            pct_change = 0.0
             change = 0.0
+            pct_change = 0.0
             high = None
             low = None
+            latest_close = live_price
 
             if hist is not None and not hist.empty:
                 closes = hist["Close"].dropna()
@@ -284,10 +221,6 @@ def fetch_stocks_data():
                     pct_change = (change / prev_close) * 100 if prev_close else 0.0
                 elif len(closes) == 1:
                     latest_close = float(closes.iloc[-1])
-                    change = 0.0
-                    pct_change = 0.0
-                else:
-                    latest_close = None
 
                 if not highs.empty:
                     high = float(highs.max())
@@ -295,7 +228,7 @@ def fetch_stocks_data():
                     low = float(lows.min())
 
             if live_price is None:
-                live_price = latest_close if "latest_close" in locals() else None
+                live_price = latest_close
 
             buy_price, target_price, stop_loss = calc_entry_target_stop(live_price)
 
@@ -313,13 +246,10 @@ def fetch_stocks_data():
             })
         except Exception:
             continue
-
     return pd.DataFrame(results)
 
-# --- 7. تحليل الفرص ---
 def generate_ai_opportunities(df_stocks, timeframe_filter):
     model = get_gemini_model()
-
     seed_val = abs(hash(timeframe_filter)) % 1000
     df_shuffled = df_stocks.sample(frac=1, random_state=seed_val).reset_index(drop=True)
 
@@ -361,7 +291,7 @@ def generate_ai_opportunities(df_stocks, timeframe_filter):
         if "```json" in text:
             text = text.split("```json")[1].split("```").strip()
         elif "```" in text:
-            text = text.split("```")[11].split("```")[0].strip()
+            text = text.split("```")[1].split("```")[0].strip()
         return json.loads(text)
     except Exception:
         timings = ["مضاربة يومية", "صعود أسبوعي", "صعود شهري", "مضاربة يومية"]
@@ -386,7 +316,6 @@ def generate_ai_opportunities(df_stocks, timeframe_filter):
             })
         return fallback_list
 
-# --- 8. واجهة التطبيق ---
 st.markdown('<h1 class="main-header">📈 أسهم الشريعة الإسلامية - البورصة المصرية</h1>', unsafe_allow_html=True)
 
 col_info, col_btn = st.columns([3, 1])
@@ -404,17 +333,14 @@ st.subheader("🔥 أكثر 5 أسهم ارتفاعاً في قائمتك")
 
 if not df_stocks.empty:
     top_gainers = df_stocks.sort_values(by="pct_change", ascending=False).head(5)
-
     for _, item in top_gainers.iterrows():
         pct = float(item["pct_change"]) if pd.notna(item["pct_change"]) else 0.0
         sign = "+" if pct >= 0 else ""
         price = item["price"]
         high = item["high"]
         low = item["low"]
-
-        change_class = "price-up" if pct >= 0 else "price-down"
         price_color = "#16a34a" if pct >= 0 else "#dc2626"
-
+        change_class = "price-up" if pct >= 0 else "price-down"
         price_text = f"{price:.2f} EGP" if pd.notna(price) else "غير متاح"
         high_text = f"{high:.2f}" if pd.notna(high) else "غير متاح"
         low_text = f"{low:.2f}" if pd.notna(low) else "غير متاح"
@@ -497,7 +423,9 @@ if not df_stocks.empty:
                 badge_class = "badge-buy"
                 border_color = "#d97706"
 
-            st.markdown(f"""
+            reason_text = item.get("أسباب التحليل", "")
+
+            html_card = """
             <div class="opp-card" style="border-right-color: {border_color};">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <span style="font-size: 1.15rem; font-weight: bold; color: #0f172a;">🎯 {stock_name}</span>
@@ -524,4 +452,21 @@ if not df_stocks.empty:
                         <div style="font-weight: bold; color: #dc2626;">{stop_loss_text}</div>
                     </div>
                 </div>
-                <div s
+                <div style="font-size: 0.9rem; color: #334155;">
+                    <strong>💡 أسباب التحليل:</strong> {reason_text}
+                </div>
+            </div>
+            """
+
+            st.markdown(
+                html_card.format(
+                    border_color=border_color,
+                    stock_name=stock_name,
+                    time_frame=time_frame,
+                    badge_class=badge_class,
+                    rec=rec,
+                    price_color=price_color,
+                    live_price_text=live_price_text,
+                    live_change_text=live_change_text,
+                    buy_price_text=buy_price_text,
+       
